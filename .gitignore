@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Wrangler / Cloudflare local state
+.wrangler/
+.dev.vars
+dev.vars
+.d1-db-id
+
+# Logs / OS
+*.log
+.DS_Store

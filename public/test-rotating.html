@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Rotating QR test source</title>
+      <link rel="stylesheet" href="./app.css" />
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+   </head>
+   <body>
+      <main class="wrap test-source">
+         <header>
+            <h1>Rotating QR test source</h1>
+            <p class="sub">Point the scanner camera at this page. The QR value and expiry text rotate together every 30 seconds.</p>
+         </header>
+         <section class="panel test-card">
+            <div id="qrcode" aria-label="Rotating QR code"></div>
+            <div id="expiryText" class="test-expiry">Loading expiry...</div>
+            <div class="status" id="rotationText">Starting...</div>
+            <div class="value-box" id="valueText"></div>
+         </section>
+      </main>
+      <script>
+         const ROTATION_MS = 30000;
+         const qr = document.getElementById('qrcode');
+         const expiryText = document.getElementById('expiryText');
+         const rotationText = document.getElementById('rotationText');
+         const valueText = document.getElementById('valueText');
+         let rotation = 0;
+         let expiresAt = 0;
+
+         function render() {
+            const now = Date.now();
+            expiresAt = now + ROTATION_MS;
+            rotation += 1;
+            const value = 'test-qr-room-7-rotation-' + rotation + '-' + now;
+            qr.textContent = '';
+            new QRCode(qr, {
+               text: value,
+               width: 280,
+               height: 280,
+               correctLevel: QRCode.CorrectLevel.M,
+            });
+            valueText.textContent = value;
+            updateCountdown();
+         }
+
+         function updateCountdown() {
+            const seconds = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+            expiryText.textContent = 'expire in ' + seconds + ' seconds';
+            rotationText.textContent = 'Rotation ' + rotation + ' · next QR in ' + seconds + 's';
+         }
+
+         render();
+         setInterval(() => {
+            if (Date.now() >= expiresAt) render();
+            else updateCountdown();
+         }, 250);
+      </script>
+   </body>
+</html>

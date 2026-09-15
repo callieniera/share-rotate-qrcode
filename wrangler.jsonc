@@ -1,0 +1,13 @@
+{
+   "$schema": "node_modules/wrangler/config-schema.json",
+   "name": "share-rotate-qrcode",
+   "compatibility_date": "2024-09-23",
+   "pages_build_output_dir": "public",
+   "d1_databases": [
+      {
+         "binding": "DB",
+         "database_name": "share-rotate-qrcode-db",
+         "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+      }
+   ]
+}

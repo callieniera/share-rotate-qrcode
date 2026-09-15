@@ -1,0 +1,16 @@
+# Copy to `.dev.vars` and fill in. `wrangler dev` reads `.dev.vars` automatically.
+#
+# No values are required for local development:
+#   - the D1 binding is auto-created as a local SQLite file, and
+#   - the API falls back to an in-memory store if the DB binding is ever missing.
+#
+# Optional overrides:
+#
+# Point the browser client at a different API origin. Defaults to same-origin
+# (the Pages site itself). Set this to e.g. your deployed URL if the static
+# assets and API live on different hosts:
+# __API_BASE__=https://share-rotate-qrcode.pages.dev
+#
+# Optional secret that gates the manual sweep endpoint (POST /api/sweep).
+# Without it, /api/sweep is disabled.
+# SWEEP_SECRET=change-me

@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "share-rotate-qrcode",
+  "compatibility_date": "2024-09-23",
+
+  // --- Cloudflare Pages project ---
+  // Static assets are served from `public/`. Pages Functions live in `functions/`
+   // and are auto-discovered (no config field for it). `wrangler pages deploy public`
+   // ships static assets + functions + bindings together.
+  "pages_build_output_dir": "public",
+
+  // --- D1 (Cloudflare's serverless SQLite) ---
+  // After creating the database with `npm run d1:create`, copy its id into
+  // `database_id` below. Local `wrangler dev` ignores this id and auto-creates a
+  // local SQLite file, and the API falls back to an in-memory store if the DB
+  // binding is ever absent — so nothing blocks local development.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "share-rotate-qrcode-db",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ]
+}
