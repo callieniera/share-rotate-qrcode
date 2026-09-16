@@ -44,7 +44,7 @@ input[type="range"] {
 .wrap {
 	width: min(100% - 2rem, 760px);
 	margin: 0 auto;
-	padding: 2rem 0 4rem;
+	padding: max(2rem, env(safe-area-inset-top)) 0 max(4rem, env(safe-area-inset-bottom));
 }
 header {
 	margin-bottom: 1.25rem;
@@ -61,11 +61,6 @@ header h1 {
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	box-shadow: var(--shadow);
-}
-#cameraPanel {
-	position: sticky;
-	top: 0.75rem;
-	z-index: 1;
 }
 .panel h2 {
 	margin: 0 0 1rem;
@@ -289,10 +284,156 @@ code {
 }
 @media (min-width: 700px) {
 	.wrap {
-		padding-top: 3.5rem;
+		padding-top: max(3.5rem, env(safe-area-inset-top));
 	}
 	.panel {
 		padding: 1.5rem;
+	}
+}
+/* Camera panel is always a grid so the sticky panel can shrink the camera view
+   and place the transport controls sensibly in both orientations.
+   Default (portrait / mobile / tablet portrait): a single full-width column so
+   every control gets a thumb-friendly width. */
+#cameraPanel {
+	display: grid;
+	gap: 0.85rem;
+	grid-template-columns: 1fr;
+	grid-template-areas:
+		"title"
+		"video"
+		"buttons"
+		"status"
+		"zoom";
+	align-items: start;
+}
+#cameraPanel h2 {
+	grid-area: title;
+	margin-bottom: 0;
+}
+#cameraPanel video {
+	grid-area: video;
+	/* Keep the whole panel on screen: cap the viewfinder to the (small) viewport
+   height so the controls below are always reachable on phones / tablets. */
+	max-height: min(62vh, 560px);
+	max-height: min(62svh, 560px);
+}
+/* Buttons fill their row (each button half the width) for a large tap target. */
+#cameraPanel .cam-buttons {
+	grid-area: buttons;
+	display: flex;
+	gap: 0.75rem;
+}
+#cameraPanel .cam-buttons button {
+	flex: 1 1 0;
+	min-width: 0;
+}
+#cameraPanel .cam-status {
+	grid-area: status;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	justify-content: flex-start;
+	min-height: 1.25rem;
+	font-size: 0.86rem;
+}
+/* Wraps the right-side controls. Transparent in portrait so its children keep
+   their own grid cells; in landscape it becomes a flex column (see media query). */
+#cameraPanel .cam-controls {
+	display: contents;
+}
+/* Leading indicator dot: muted when idle, pulsing green while scanning. */
+#cameraPanel .cam-status::before {
+	content: "";
+	width: 0.55rem;
+	height: 0.55rem;
+	flex: 0 0 auto;
+	border-radius: 999px;
+	background: var(--muted);
+	transition: background 0.2s;
+}
+#cameraPanel .zoom-control {
+	grid-area: zoom;
+	margin-top: 0;
+}
+
+#cameraPanel {
+	position: sticky;
+	top: max(0.75rem, env(safe-area-inset-top));
+	z-index: 1;
+}
+@media (max-height: 650px) {
+	#cameraPanel {
+		position: relative;
+		top: auto;
+	}
+}
+
+/* Horizontal (wide / landscape, and wide tablets): let the viewfinder dominate
+   the left while the right side becomes one cohesive, vertically-centred
+   controls group.
+     title   (full width)
+     video (left, tall)   |  buttons
+                             status
+                             zoom */
+
+@media (orientation: landscape), (min-width: 450px) {
+	#cameraPanel {
+		align-items: stretch;
+		grid-template-columns: minmax(0, 1.7fr) minmax(14rem, 1fr);
+		grid-template-areas:
+			"title   title"
+			"video   controls";
+	}
+	#cameraPanel video {
+		align-self: stretch;
+		max-height: min(80svh, 560px);
+	}
+	/* Right column: the control group becomes one flex column that spreads to the
+   viewfinder's height so buttons / status / zoom stay evenly spaced. */
+	#cameraPanel .cam-controls {
+		display: flex;
+		flex-direction: column;
+		grid-area: controls;
+		justify-content: space-between;
+		gap: 1.25rem;
+	}
+	#cameraPanel .cam-buttons {
+		flex-direction: row;
+	}
+	#cameraPanel .cam-status {
+		margin-top: auto;
+	}
+}
+
+/* Live-camera feedback: while scanning (Start disabled, Stop enabled) the status
+   dot pulses and the panel / viewfinder get a subtle "live" accent. */
+#cameraPanel:has(#btnStop:not(:disabled)) .cam-status::before {
+	background: var(--ok);
+	animation: cam-pulse 1.5s ease-in-out infinite;
+}
+#cameraPanel:has(#btnStop:not(:disabled)) {
+	border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
+}
+#cameraPanel:has(#btnStop:not(:disabled)) #video {
+	outline: 2px solid color-mix(in srgb, var(--ok) 55%, transparent);
+	outline-offset: 2px;
+}
+@keyframes cam-pulse {
+	0% {
+		box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 60%, transparent);
+	}
+	70% {
+		box-shadow: 0 0 0 6px transparent;
+	}
+	100% {
+		box-shadow: 0 0 0 0 transparent;
+	}
+}
+
+/* Touch ergonomics: a taller zoom slider on touch devices. */
+@media (pointer: coarse) {
+	#cameraPanel .zoom-control input[type="range"] {
+		min-height: 1.5rem;
 	}
 }
 @media (prefers-reduced-motion: reduce) {
@@ -301,5 +442,6 @@ code {
 	*::after {
 		scroll-behavior: auto !important;
 		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
 	}
 }

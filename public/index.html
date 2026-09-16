@@ -1,77 +1,82 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-		<title>Scanner · Rotating QR Sharer</title>
-		<meta name="api-base" content="" />
-		<link rel="stylesheet" href="./app.css" />
 
-		<!-- QR decoder (lightweight, single-file). Loaded as a global `jsQR`. -->
-		<script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
-		<!-- OCR for the expiry text under the QR. Loaded as a global `Tesseract`.
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+	<title>Scanner · Rotating QR Sharer</title>
+	<meta name="api-base" content="" />
+	<link rel="stylesheet" href="./app.css" />
+
+	<!-- QR decoder (lightweight, single-file). Loaded as a global `jsQR`. -->
+	<script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
+	<!-- OCR for the expiry text under the QR. Loaded as a global `Tesseract`.
            The engine/wasm/worker assets are pulled from the same CDN on demand. -->
-		<script src="https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-	</head>
-	<body>
-		<div class="wrap">
-			<header>
-				<h1>Scanner</h1>
-			</header>
+	<script src="https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+</head>
 
-			<!-- Camera -->
-			<section class="panel" id="cameraPanel">
-				<h2>Camera</h2>
-				<video id="video" playsinline muted></video>
-				<canvas id="canvas" class="hidden"></canvas>
-				<div class="row" style="margin-top: 12px">
-					<button id="btnStart" class="primary">Start camera</button>
+<body>
+	<div class="wrap">
+		<header>
+			<h1>Scanner</h1>
+		</header>
+
+		<!-- Camera -->
+		<section class="panel" id="cameraPanel">
+			<h2>Camera</h2>
+			<video id="video" playsinline muted></video>
+			<canvas id="canvas" class="hidden"></canvas>
+			<div class="cam-controls">
+				<div class="row cam-buttons">
+					<button id="btnStart" class="primary">Start</button>
 					<button id="btnStop" disabled>Stop</button>
-					<span class="status grow" id="camStatus">Camera stopped.</span>
 				</div>
+				<span class="status cam-status" id="camStatus" role="status" aria-live="polite">Camera stopped.</span>
 				<label id="zoomControl" class="zoom-control hidden">
 					<span>Zoom</span>
 					<input id="zoomValue" type="range" aria-label="Camera zoom" />
 				</label>
-			</section>
+			</div>
+		</section>
+		<!-- Live session -->
+		<section class="panel" id="sessionPanel">
+			<h2>Session</h2>
+			<div class="row between">
+				<span class="badge waiting" id="badgeStatus">idle</span>
+				<span class="status" id="lastUpload">no uploads yet</span>
+			</div>
+			<label class="field">Share link</label>
+			<input type="text" id="shareLink" readonly placeholder="Start scanning to get a session…"
+				aria-label="Share link. Click to copy." />
+			<div class="kv" style="margin-top: 12px">
+				<div class="k">Last QR value</div>
+				<div class="v" id="lastValue" title="Last decoded QR text">—</div>
+			</div>
+		</section>
 
-			<!-- Live session -->
-			<section class="panel" id="sessionPanel">
-				<h2>Session</h2>
-				<div class="row between">
-					<span class="badge waiting" id="badgeStatus">idle</span>
-					<span class="status" id="lastUpload">no uploads yet</span>
-				</div>
-				<label class="field">Share link</label>
-				<input type="text" id="shareLink" readonly placeholder="Start scanning to get a session…" aria-label="Share link. Click to copy." />
-				<div class="kv" style="margin-top: 12px">
-					<div class="k">Last QR value</div>
-					<div class="v" id="lastValue" title="Last decoded QR text">—</div>
-				</div>
-			</section>
+		<!-- Controls -->
+		<section class="panel">
+			<h2>Settings</h2>
 
-			<!-- Controls -->
-			<section class="panel">
-				<h2>Settings</h2>
+			<div class="row between" style="margin-top: 10px">
+				<label class="field" style="margin: 0">
+					<input type="checkbox" id="ocrEnabled" checked style="width: auto; vertical-align: middle" />
+					OCR the expiry text under the QR
+				</label>
+			</div>
+			<label class="field">OCR Target Hint</label>
+			<input type="text" id="ocrHint" value="QR code valid for: n seconds" />
+		</section>
 
-				<div class="row between" style="margin-top: 10px">
-					<label class="field" style="margin: 0">
-						<input type="checkbox" id="ocrEnabled" checked style="width: auto; vertical-align: middle" />
-						OCR the expiry text under the QR
-					</label>
-				</div>
-				<label class="field">OCR Target Hint</label>
-				<input type="text" id="ocrHint" value="QR code valid for: n seconds" />
-			</section>
+		<!-- Log -->
+		<details class="panel disclosure">
+			<summary>Log</summary>
+			<pre id="log" class="value-box" style="max-height: 180px; overflow: auto; white-space: pre"></pre>
+		</details>
+	</div>
 
-			<!-- Log -->
-			<details class="panel disclosure">
-				<summary>Log</summary>
-				<pre id="log" class="value-box" style="max-height: 180px; overflow: auto; white-space: pre"></pre>
-			</details>
-		</div>
+	<script src="./common.js"></script>
+	<script type="module" src="./scan.js"></script>
+</body>
 
-		<script src="./common.js"></script>
-		<script type="module" src="./scan.js"></script>
-	</body>
 </html>
