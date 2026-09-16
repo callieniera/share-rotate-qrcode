@@ -98,14 +98,23 @@ async function handleCreateOrUpdate(request, env) {
 
 	const store = storeFor(env);
 	const uuid = await store.createOrReuseSession(requestedUuid, value, now);
+	const previous = await store.getLatest(uuid);
 	await store.appendUpdate(uuid, normalizeUpdate(body, now), now);
 	const lastUploadAt = await store.getLastUploadAt(uuid);
+	const matchedUpdate = previous && String(previous.value) === value && previous.expires_at != null && !previous.expiry_fallback
+		? {
+			value: previous.value,
+			rotationAt: previous.rotation_at,
+			expiresAt: previous.expires_at,
+		}
+		: null;
 
 	return json(200, {
 		uuid,
 		status: sessionStatus(lastUploadAt, now),
 		createdAt: now,
 		lastUploadAt,
+		matchedUpdate,
 	});
 }
 

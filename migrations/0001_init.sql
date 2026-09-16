@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS updates (
   value       TEXT,                           -- decoded QR text (the shared payload)
   rotation_at INTEGER,                        -- when this rotation was captured (epoch ms)
   expires_at  INTEGER,                        -- OCR'd expiry printed under the QR (epoch ms)
+  expiry_fallback INTEGER NOT NULL DEFAULT 1, -- 1 until OCR or another scanner confirms expiry
   created_at  INTEGER NOT NULL,               -- epoch ms
   FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
 );

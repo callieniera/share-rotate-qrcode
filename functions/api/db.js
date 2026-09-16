@@ -40,14 +40,19 @@ class D1SessionStore {
             this.db.prepare(
                 'CREATE TABLE IF NOT EXISTS updates (' +
                    'id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, value TEXT, ' +
-                   'rotation_at INTEGER, expires_at INTEGER, created_at INTEGER NOT NULL, ' +
+                     'rotation_at INTEGER, expires_at INTEGER, expiry_fallback INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL, ' +
                    'FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE)'
              ),
             this.db.prepare(
                 'CREATE INDEX IF NOT EXISTS idx_updates_session_id ON updates (session_id, id DESC)'
              ),
           ]);
-        })();
+         try {
+            await this.db.prepare('ALTER TABLE updates ADD COLUMN expiry_fallback INTEGER NOT NULL DEFAULT 1').run();
+         } catch (error) {
+            if (!String(error && error.message).includes('duplicate column name')) throw error;
+         }
+         })();
       return this._ready;
    }
 
@@ -95,9 +100,9 @@ class D1SessionStore {
       await this.ensureSchema();
       await this.db
           .prepare(
-             'INSERT INTO updates (session_id, value, rotation_at, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
+             'INSERT INTO updates (session_id, value, rotation_at, expires_at, expiry_fallback, created_at) VALUES (?, ?, ?, ?, ?, ?)'
           )
-          .bind(uuid, update.value, update.rotation_at, update.expires_at, now)
+          .bind(uuid, update.value, update.rotation_at, update.expires_at, update.expiry_fallback ? 1 : 0, now)
           .run();
       await this.db.prepare('UPDATE sessions SET last_upload_at = ? WHERE id = ?').bind(now, uuid).run();
     }
@@ -106,7 +111,7 @@ class D1SessionStore {
       await this.ensureSchema();
       return this.db
           .prepare(
-             'SELECT id, value, rotation_at, expires_at, created_at FROM updates ' +
+                'SELECT id, value, rotation_at, expires_at, expiry_fallback, created_at FROM updates ' +
                 'WHERE session_id = ? ORDER BY id DESC LIMIT 1'
           )
           .bind(uuid)
@@ -127,7 +132,7 @@ class D1SessionStore {
       if (id == null) return this.getLatest(uuid);
       return this.db
           .prepare(
-             'SELECT id, value, rotation_at, expires_at, created_at FROM updates ' +
+             'SELECT id, value, rotation_at, expires_at, expiry_fallback, created_at FROM updates ' +
                 'WHERE session_id = ? AND id > ? ORDER BY id DESC LIMIT 1'
           )
           .bind(uuid, id)
@@ -183,6 +188,7 @@ class MemorySessionStore {
          value: update.value,
          rotation_at: update.rotation_at ?? null,
          expires_at: update.expires_at ?? null,
+         expiry_fallback: update.expiry_fallback ? 1 : 0,
          created_at: now,
       };
       this.updates.set(id, row);
@@ -263,6 +269,7 @@ export function normalizeUpdate(raw, now) {
       value: raw.value == null ? null : String(raw.value),
       rotation_at: pick(raw.rotationAt ?? raw.rotation_at),
       expires_at: pick(raw.expiresAt ?? raw.expires_at),
+      expiry_fallback: raw.expiryFallback === true || raw.expiry_fallback === true,
       created_at: now,
     };
 }

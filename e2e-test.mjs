@@ -42,11 +42,15 @@ console.log("\n[POST /api/sessions] uuid reuse updates current value");
 {
 	const r = await call(ctx("/api/sessions", { method: "POST", body: { uuid: globalThis.__uuid, value: "OTC-B", rotationAt: 2, expiresAt: 9e13 } }));
 	assert(r.json.uuid === globalThis.__uuid, "active uuid is reused");
+	assert(r.json.matchedUpdate === null, "first upload for a QR has no matched update");
 	assert(!Object.prototype.hasOwnProperty.call(r.json, "key"), "response has no key field");
 	const otherScanner = await call(ctx("/api/sessions", { method: "POST", body: { value: "OTC-B" } }));
 	assert(otherScanner.json.uuid === globalThis.__uuid, "second scanner matches current QR value");
+	assert(otherScanner.json.matchedUpdate && otherScanner.json.matchedUpdate.expiresAt === 9e13, "matching QR receives existing expiry");
 	const oldQr = await call(ctx("/api/sessions", { method: "POST", body: { value: "OTC-A" } }));
 	assert(oldQr.json.uuid !== globalThis.__uuid, "old QR value does not match rotated session");
+	const fallback = await call(ctx("/api/sessions", { method: "POST", body: { value: "OTC-B", expiresAt: 9e13, expiryFallback: true } }));
+	assert(fallback.json.matchedUpdate === null, "fallback expiry is not shared as valid");
 }
 
 console.log("\n[GET /api/sessions/:uuid] latest");

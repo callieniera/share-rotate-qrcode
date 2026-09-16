@@ -76,25 +76,10 @@ const QR_VALID_WINDOW_MS = 2000;
 // debugging. Modes:
 //   - "epoch": a run of digits -> ms (len>=13) or seconds (len 10) *1000
 //   - otherwise try Date.parse on a cleaned string
-function parseExpiry(raw, hint = "") {
+function parseExpiry(raw) {
 	if (raw == null) return null;
-	const text = String(raw);
-	const hintWords = String(hint)
-		.toLowerCase()
-		.match(/[a-z]+/g)
-		?.filter((word) => !["n", "second", "seconds"].includes(word)) || [];
-	const secondPattern = /(\d+)\s*s\s*e\s*c\s*(?:o|0)\s*n\s*(?:d|c\s*[iIl1])\s*s?\b/gi;
-	let best = null;
-	for (const match of text.matchAll(secondPattern)) {
-		const prefix = text.slice(Math.max(0, match.index - 48), match.index);
-		const words = prefix.toLowerCase().match(/[a-z]+/g) || [];
-		const score = hintWords.reduce(
-			(total, hintWord) => total + (words.some((word) => fuzzyWordMatch(word, hintWord)) ? 1 : 0),
-			0
-		);
-		if (!best || score > best.score) best = { seconds: Number(match[1]), score };
-	}
-	if (best) return Date.now() + best.seconds * 1000;
+	const seconds = String(raw).match(/(\d+)\s*s\s*e\s*c\s*(?:o|0)\s*n\s*(?:d|c\s*[iIl1])\s*s?\b/i);
+	if (seconds) return Date.now() + Number(seconds[1]) * 1000;
 	const s = String(raw)
 		.replace(/[^0-9:\.\-]/g, " ")
 		.replace(/\s+/g, " ")
@@ -119,26 +104,6 @@ function parseExpiry(raw, hint = "") {
 		return d.getTime();
 	}
 	return null;
-}
-
-function fuzzyWordMatch(left, right) {
-	if (left === right) return true;
-	if (Math.abs(left.length - right.length) > 1) return false;
-	let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
-	for (let i = 0; i < left.length; i++) {
-		const current = [i + 1];
-		for (let j = 0; j < right.length; j++) {
-			current.push(
-				Math.min(
-					current[j] + 1,
-					previous[j + 1] + 1,
-					previous[j] + (left[i] === right[j] ? 0 : 1)
-				)
-			);
-		}
-		previous = current;
-	}
-	return previous[right.length] <= 1;
 }
 
 // --- Camera ------------------------------------------------------------------
@@ -299,11 +264,11 @@ function startOcr(location) {
 	const rotationValue = current.value;
 	let parsedExpiry = null;
 	getOcrWorker()
-		.then((worker) => worker.recognize(region))
+		.then((worker) => worker.recognize(region, { user_patterns: cfg.ocrHint || "QR code valid for: n seconds" }))
 		.then(({ data }) => {
 			const raw = (data && data.text ? data.text : "").replace(/\n/g, " ").trim();
 			lastOcrRaw = raw;
-			parsedExpiry = parseExpiry(raw, cfg.ocrHint);
+			parsedExpiry = parseExpiry(raw);
 			log('OCR: "' + raw + '" -> ' + (parsedExpiry ? new Date(parsedExpiry).toISOString() : "unparsed"));
 			// Only apply if this is still the current rotation.
 			if (raw && parsedExpiry && lastValue === rotationValue && lastValue === current.value) {
@@ -404,6 +369,7 @@ async function upload() {
 		value: current.value,
 		rotationAt: current.rotationAt,
 		expiresAt: current.expiresAt,
+		expiryFallback: current.expiryFallback,
 	};
 	try {
 		const res = await fetch(SHARE.apiUrl("/api/sessions"), {
@@ -414,6 +380,16 @@ async function upload() {
 		if (!res.ok) throw new Error("HTTP " + res.status);
 		const data = await res.json();
 		currentUuid = data.uuid;
+		const matchedExpiresAt = Number(data.matchedUpdate && data.matchedUpdate.expiresAt);
+		if (
+			data.matchedUpdate &&
+			String(data.matchedUpdate.value) === String(current.value) &&
+			Number.isFinite(matchedExpiresAt) &&
+			matchedExpiresAt > Date.now()
+		) {
+			current.expiresAt = matchedExpiresAt;
+			current.expiryFallback = false;
+		}
 		lastUploadAt = Date.now();
 		startUploadAgeTimer();
 		pendingUpload = false;
@@ -441,9 +417,11 @@ function scheduleHeartbeat() {
 	if (heartbeat) return;
 	heartbeat = setInterval(() => {
 		// Re-upload the current value to refresh last_upload_at and keep the
-		// session within its TTL until a real rotation supersedes it.
-		if (hasValidQr()) {
-			if (current.expiryFallback) pendingUpload = true;
+		// fallback session within its TTL until OCR resolves the expiry or a
+		// real rotation supersedes it. Once OCR provides an expiry, the server
+		// should not receive renewal data until the QR rotates.
+		if (hasValidQr() && current.expiryFallback) {
+			pendingUpload = true;
 			upload();
 		}
 	}, 5000);
