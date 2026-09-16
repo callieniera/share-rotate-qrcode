@@ -21,17 +21,20 @@ function validId(value) {
 	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
 }
 
-function idFromJsonOutput(output) {
+function databaseFromJsonOutput(output) {
 	const start = output.search(/[\[{]/);
 	if (start < 0) return null;
 	try {
 		const parsed = JSON.parse(output.slice(start));
 		const rows = Array.isArray(parsed) ? parsed : parsed.result || parsed.databases || [];
-		const row = rows.find((item) => item.name === databaseName || item.database_name === databaseName);
-		return row?.uuid || row?.id || row?.database_id || null;
+		return rows.find((item) => item.name === databaseName || item.database_name === databaseName) || null;
 	} catch (_) {
 		return null;
 	}
+}
+
+function idFromDatabase(database) {
+	return database?.uuid || database?.id || database?.database_id || null;
 }
 
 function idFromCreateOutput(output) {
@@ -62,10 +65,9 @@ if (!validId(databaseId || "")) {
 	}
 }
 
-if (!validId(databaseId || "")) {
-	console.log(`Looking for D1 database '${databaseName}'...`);
-	databaseId = idFromJsonOutput(runWrangler(["d1", "list", "--json"]));
-}
+console.log(`Checking for D1 database '${databaseName}'...`);
+const existingDatabase = databaseFromJsonOutput(runWrangler(["d1", "list", "--json"]));
+databaseId = idFromDatabase(existingDatabase);
 
 if (!validId(databaseId || "")) {
 	console.log(`Creating D1 database '${databaseName}'...`);
