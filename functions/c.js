@@ -19,6 +19,7 @@ const CONSUMER_HTML = `<!DOCTYPE html>
 </div>
 </section>
 <details class="panel disclosure"><summary>History</summary><pre id="history" class="value-box" style="max-height:160px;overflow:auto;white-space:pre"></pre></details>
+<footer class="page-footer" data-footer></footer>
 </div>
 <script src="/common.js"></script>
 <script type="module" src="/consumer.js"></script>

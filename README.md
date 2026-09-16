@@ -35,7 +35,7 @@ npm run dev
 Open the scanner at **https** or **localhost** (the camera needs a secure context):
 
 - Scanner: `http://localhost:8787/`
-- Viewer:   `http://localhost:8787/c.html?uuid=<uuid>`
+- Viewer:    `http://localhost:8787/c?uuid=<uuid>`
 
 > Without a D1 binding the API automatically falls back to an **in-memory** store, so the
 > whole flow is runnable with zero cloud setup. State is lost on restart.
@@ -53,7 +53,7 @@ authenticated Cloudflare account, creates it if needed, applies the remote schem
 and deploys Pages. Run `npx wrangler login` first.
 
 After deploy you get a `https://<project>.pages.dev` URL. Open it as the scanner; the
-`/c.html?uuid=<uuid>` link it produces is the shareable viewer.
+`/c?uuid=<uuid>` link it produces is the shareable viewer.
 
 ### Optional: scheduled expiry sweep
 
@@ -112,7 +112,7 @@ migrations/0001_init.sql           sessions + updates schema
 functions/api/[[route]].js         single catch-all API dispatcher
 functions/api/db.js                storage layer (D1 + in-memory), TTL, view helpers
 public/index.html  public/scan.js  scanner (camera + jsQR + Tesseract OCR + upload)
-public/c.html      public/consumer.js  viewer (poll + history)
+functions/c.js     public/consumer.js  viewer (poll + history)
 public/common.js   shared browser helpers (copy, time formatting, API base)
 public/app.css     styling
 ```

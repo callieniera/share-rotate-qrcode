@@ -445,3 +445,34 @@ code {
 		animation-duration: 0.01ms !important;
 	}
 }
+
+/* Shared page footer. Populated by common.js (META / renderFooter); the markup
+   is injected at runtime so the HTML only carries an empty [data-footer] tag. */
+.page-footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.4rem 1rem;
+	margin-top: 1.5rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border);
+	color: var(--muted);
+	font-size: 0.78rem;
+}
+.footer-copy {
+	color: var(--muted);
+}
+.footer-link {
+	color: var(--accent);
+	text-decoration: none;
+	white-space: nowrap;
+}
+.footer-link:hover {
+	text-decoration: underline;
+}
+.footer-link:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--accent) 40%, transparent);
+	outline-offset: 2px;
+	border-radius: 0.3rem;
+}

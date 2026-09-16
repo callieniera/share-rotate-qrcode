@@ -71,5 +71,58 @@
 		return d.toLocaleString();
 	}
 
-	window.SHARE = { shareURL, apiUrl, copyText, escapeHtml, formatRelative, formatDur, formatClock, API_BASE };
+	// Page metadata. Kept here (not hard-coded into the HTML) so the footer text,
+	// repository link, and version live in one place and stay in sync across every
+	// page. Set any field to "" to hide that part of the footer. Bump `version`
+	// to match the "version" field in package.json.
+	const META = {
+		// GitHub repository. Leave "" to hide the link.
+		repoUrl: "https://github.com/callieniera/share-rotate-qrcode",
+		// Shown next to the repo link, e.g. "v1.0.0". Leave "" to hide.
+		version: "1.0.0",
+		// Display name shown in the footer. Leave "" to hide.
+		name: "share-rotate-qrcode",
+	};
+
+	// Fill the first `[data-footer]` element found in the given root (defaults to
+	// the document) with the shared footer. Safe to call when the target is
+	// absent — it just returns null. Returns the element it rendered into.
+	function renderFooter(root = document) {
+		const el = root.querySelector("[data-footer]");
+		if (!el) return null;
+
+		el.textContent = "";
+		el.removeAttribute("hidden");
+
+		// Left side: name · version
+		const leftParts = [];
+		if (META.name) leftParts.push(META.name);
+		if (META.version) leftParts.push("v" + META.version);
+		if (leftParts.length) {
+			const left = document.createElement("span");
+			left.className = "footer-copy";
+			left.textContent = leftParts.join(" · ");
+			el.appendChild(left);
+		}
+
+		// Right side: repository link.
+		if (META.repoUrl) {
+			const link = document.createElement("a");
+			link.className = "footer-link";
+			link.href = META.repoUrl;
+			link.textContent = "GitHub";
+			link.target = "_blank";
+			link.rel = "noopener noreferrer";
+			link.setAttribute("aria-label", "Open the GitHub repository");
+			el.appendChild(link);
+		}
+
+		return el;
+	}
+
+	// Render the footer now (the placeholder lives in the DOM by the time this
+	// runs) and expose it for manual refresh / testing.
+	renderFooter();
+
+	window.SHARE = { shareURL, apiUrl, copyText, escapeHtml, formatRelative, formatDur, formatClock, renderFooter, META, API_BASE };
 })();
