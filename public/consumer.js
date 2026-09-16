@@ -99,15 +99,19 @@ function render(view) {
 			currentExpiresAt = null;
 		}
 	}
+	updateUpdatedAge();
 	setBadge(view.status === "expired" || currentExpiresAt == null || currentExpiresAt <= Date.now() ? "expired" : "active");
 	updateDataActions();
 }
 
 function updateUpdatedAge() {
 	updateDataActions();
-	if (!hasRenderedUpdate || currentExpiresAt == null || currentExpiresAt <= Date.now()) return;
+	if (!hasRenderedUpdate) return;
 	const timestamp = Number($("updated").dataset.timestamp);
-	if (Number.isFinite(timestamp)) $("updated").textContent = SHARE.formatRelative(timestamp);
+	if (Number.isFinite(timestamp)) {
+		const expired = currentSessionExpired || (currentExpiresAt != null && currentExpiresAt <= Date.now());
+		$("updated").textContent = (expired ? "expired " : "") + SHARE.formatRelative(timestamp);
+	}
 }
 
 function startUpdatedAgeTimer() {
