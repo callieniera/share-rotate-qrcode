@@ -55,6 +55,8 @@ const ctx = canvas.getContext("2d", { willReadFrequently: true });
 let ocrWorker = null;
 let ocrBusy = false;
 let lastOcrStart = 0;
+let ocrRetryTimer = null;
+let currentQrLocation = null;
 
 // The "current" payload we keep uploading. `value`/`rotationAt` come from the QR;
 // `expiresAt` comes from the most recent OCR for the *current* rotation.
@@ -74,10 +76,25 @@ const QR_VALID_WINDOW_MS = 2000;
 // debugging. Modes:
 //   - "epoch": a run of digits -> ms (len>=13) or seconds (len 10) *1000
 //   - otherwise try Date.parse on a cleaned string
-function parseExpiry(raw) {
+function parseExpiry(raw, hint = "") {
 	if (raw == null) return null;
-	const seconds = String(raw).match(/(\d+)\s*s\s*e\s*c\s*(?:o|0)\s*n\s*(?:d|c\s*[iIl1])\s*s?\b/i);
-	if (seconds) return Date.now() + Number(seconds[1]) * 1000;
+	const text = String(raw);
+	const hintWords = String(hint)
+		.toLowerCase()
+		.match(/[a-z]+/g)
+		?.filter((word) => !["n", "second", "seconds"].includes(word)) || [];
+	const secondPattern = /(\d+)\s*s\s*e\s*c\s*(?:o|0)\s*n\s*(?:d|c\s*[iIl1])\s*s?\b/gi;
+	let best = null;
+	for (const match of text.matchAll(secondPattern)) {
+		const prefix = text.slice(Math.max(0, match.index - 48), match.index);
+		const words = prefix.toLowerCase().match(/[a-z]+/g) || [];
+		const score = hintWords.reduce(
+			(total, hintWord) => total + (words.some((word) => fuzzyWordMatch(word, hintWord)) ? 1 : 0),
+			0
+		);
+		if (!best || score > best.score) best = { seconds: Number(match[1]), score };
+	}
+	if (best) return Date.now() + best.seconds * 1000;
 	const s = String(raw)
 		.replace(/[^0-9:\.\-]/g, " ")
 		.replace(/\s+/g, " ")
@@ -102,6 +119,26 @@ function parseExpiry(raw) {
 		return d.getTime();
 	}
 	return null;
+}
+
+function fuzzyWordMatch(left, right) {
+	if (left === right) return true;
+	if (Math.abs(left.length - right.length) > 1) return false;
+	let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+	for (let i = 0; i < left.length; i++) {
+		const current = [i + 1];
+		for (let j = 0; j < right.length; j++) {
+			current.push(
+				Math.min(
+					current[j] + 1,
+					previous[j + 1] + 1,
+					previous[j] + (left[i] === right[j] ? 0 : 1)
+				)
+			);
+		}
+		previous = current;
+	}
+	return previous[right.length] <= 1;
 }
 
 // --- Camera ------------------------------------------------------------------
@@ -140,6 +177,10 @@ async function startCamera() {
 
 function stopCamera() {
 	running = false;
+	if (ocrRetryTimer) {
+		clearTimeout(ocrRetryTimer);
+		ocrRetryTimer = null;
+	}
 	if (noQrTimer) {
 		clearTimeout(noQrTimer);
 		noQrTimer = null;
@@ -221,7 +262,12 @@ function decodeFrame() {
 
 // --- Rotation handling -------------------------------------------------------
 function onNewRotation(value, location) {
+	if (ocrRetryTimer) {
+		clearTimeout(ocrRetryTimer);
+		ocrRetryTimer = null;
+	}
 	lastValue = value;
+	currentQrLocation = location;
 	current.value = value;
 	current.rotationAt = Date.now();
 	current.expiresAt = Date.now() + 15000; // safe fallback until OCR succeeds
@@ -229,13 +275,16 @@ function onNewRotation(value, location) {
 	pendingUpload = true;
 	renderSession();
 
-	if (cfg.ocrEnabled && location) startOcr(location);
+	if (cfg.ocrEnabled && location) {
+		startOcr(location);
+		scheduleOcrRetry(value);
+	}
 	scheduleUpload();
 }
 
 // OCR the strip directly BELOW the QR (where the expiry is printed).
 function startOcr(location) {
-	if (!cfg.ocrEnabled) return;
+	if (!cfg.ocrEnabled || !hasValidQr()) return;
 	const now = performance.now();
 	if (ocrBusy || now - lastOcrStart < 1500) return; // throttle
 	if (typeof window.Tesseract === "undefined") {
@@ -247,16 +296,18 @@ function startOcr(location) {
 
 	ocrBusy = true;
 	lastOcrStart = now;
+	const rotationValue = current.value;
+	let parsedExpiry = null;
 	getOcrWorker()
-		.then((worker) => worker.recognize(region, { user_patterns: cfg.ocrHint || "QR code valid for: n seconds" }))
+		.then((worker) => worker.recognize(region))
 		.then(({ data }) => {
 			const raw = (data && data.text ? data.text : "").replace(/\n/g, " ").trim();
 			lastOcrRaw = raw;
-			const parsed = parseExpiry(raw);
-			log('OCR: "' + raw + '" -> ' + (parsed ? new Date(parsed).toISOString() : "unparsed"));
+			parsedExpiry = parseExpiry(raw, cfg.ocrHint);
+			log('OCR: "' + raw + '" -> ' + (parsedExpiry ? new Date(parsedExpiry).toISOString() : "unparsed"));
 			// Only apply if this is still the current rotation.
-			if (raw && parsed && lastValue === current.value) {
-				current.expiresAt = parsed;
+			if (raw && parsedExpiry && lastValue === rotationValue && lastValue === current.value) {
+				current.expiresAt = parsedExpiry;
 				current.expiryFallback = false;
 				pendingUpload = true;
 				renderSession();
@@ -266,7 +317,20 @@ function startOcr(location) {
 		.catch((e) => log("OCR error: " + e.message))
 		.finally(() => {
 			ocrBusy = false;
+			if (!parsedExpiry && cfg.ocrEnabled && hasValidQr() && lastValue === rotationValue && current.expiryFallback) {
+				scheduleOcrRetry(rotationValue);
+			}
 		});
+}
+
+function scheduleOcrRetry(rotationValue) {
+	if (ocrRetryTimer) return;
+	ocrRetryTimer = setTimeout(() => {
+		ocrRetryTimer = null;
+		if (cfg.ocrEnabled && hasValidQr() && lastValue === rotationValue && current.expiryFallback && currentQrLocation) {
+			startOcr(currentQrLocation);
+		}
+	}, 1600);
 }
 
 // Compute the source-pixel rect for the text strip below the QR and render it to a
