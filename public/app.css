@@ -62,6 +62,11 @@ header h1 {
 	border-radius: var(--radius);
 	box-shadow: var(--shadow);
 }
+#cameraPanel {
+	position: sticky;
+	top: 0.75rem;
+	z-index: 1;
+}
 .panel h2 {
 	margin: 0 0 1rem;
 	color: var(--muted);
