@@ -1,28 +1,28 @@
 -- 0001_init.sql
 -- Schema for rotating-QR sharing.
 --
--- sessions : one row per shareable session. `key` is the client-supplied session
---            key (NULL when the client did not provide one). A partial UNIQUE index
---            on `key` (ignoring NULLs) guarantees "same key => same session/uuid",
---            which is the crux of goals 4 & 6 (same QR -> same session, even across
---            different scanners). Each new keyless upload always creates a fresh
---            session.
+-- The existing database is intentionally reset because the old `key` model is
+-- incompatible with rotating QR values.
+DROP TABLE IF EXISTS updates;
+DROP TABLE IF EXISTS sessions;
+
+-- sessions : one row per shareable session. `current_value` is the latest QR
+-- payload associated with the session and is used for exact-value lookup.
 -- updates  : append-only log of decoded values pushed to a session, most recent
---            first. `last_upload_at` on the session drives the 5-minute expiry
+--            first. `last_upload_at` on the session drives the 30-minute expiry
 --            (goal 7).
 
 CREATE TABLE IF NOT EXISTS sessions (
   id             TEXT PRIMARY KEY,            -- session UUID (the shareable secret)
-  key            TEXT,                        -- client session key (nullable, unique)
+  current_value  TEXT,                        -- latest QR payload (nullable, unique)
   created_at     INTEGER NOT NULL,            -- epoch ms
   last_upload_at INTEGER NOT NULL             -- epoch ms of the most recent update
 );
 
--- SQLite treats every NULL as distinct, so a plain UNIQUE(key) would forbid more
--- than one keyless session. A partial index enforces uniqueness only for real
--- (non-NULL) keys and lets any number of keyless sessions coexist.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_key
-  ON sessions (key) WHERE key IS NOT NULL;
+-- SQLite treats every NULL as distinct, so a partial index permits sessions with
+-- no current value while preventing duplicate current QR values.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_current_value
+  ON sessions (current_value) WHERE current_value IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS updates (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

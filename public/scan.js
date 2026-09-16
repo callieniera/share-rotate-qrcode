@@ -21,8 +21,6 @@ const log = (msg) => {
 
 // --- Persistent config (survives reloads) ------------------------------------
 const CONFIG_KEY = "srq:config";
-const DEVICE_KEY = "srq:deviceKey";
-
 function loadConfig() {
 	let cfg = {};
 	try {
@@ -41,15 +39,6 @@ function loadConfig() {
 function saveConfig(cfg) {
 	localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
 }
-function getDeviceKey() {
-	let k = localStorage.getItem(DEVICE_KEY);
-	if (!k) {
-		k = "dev-" + crypto.randomUUID();
-		localStorage.setItem(DEVICE_KEY, k);
-	}
-	return k;
-}
-
 // --- State -------------------------------------------------------------------
 const cfg = loadConfig();
 let stream = null;
@@ -78,10 +67,6 @@ let currentUuid = null;
 let lastOcrRaw = null;
 let lastQrSeenAt = 0;
 const QR_VALID_WINDOW_MS = 2000;
-
-function resolveKey(value) {
-	return getDeviceKey();
-}
 
 // --- Expiry parsing ----------------------------------------------------------
 // The expiry text is whatever is printed under the QR. We don't control its format,
@@ -350,9 +335,8 @@ function hasValidQr() {
 async function upload() {
 	if (!hasValidQr()) return;
 	if (current.expiryFallback) current.expiresAt = Date.now() + 15000;
-	const key = resolveKey(current.value);
 	const body = {
-		key,
+		uuid: currentUuid,
 		value: current.value,
 		rotationAt: current.rotationAt,
 		expiresAt: current.expiresAt,

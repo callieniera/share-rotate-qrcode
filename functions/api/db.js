@@ -12,7 +12,7 @@
 // object implementing the small interface documented on `SessionStore`.
 
 // Goal 7: a session with no upload for this long is considered expired.
-export const SESSION_TTL_MS = 5 * 60 * 1000;
+export const SESSION_TTL_MS = 30 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // D1 backend
@@ -32,10 +32,10 @@ class D1SessionStore {
          await this.db.batch([
             this.db.prepare(
                 'CREATE TABLE IF NOT EXISTS sessions (' +
-                   'id TEXT PRIMARY KEY, key TEXT, created_at INTEGER NOT NULL, last_upload_at INTEGER NOT NULL)'
+                  'id TEXT PRIMARY KEY, current_value TEXT, created_at INTEGER NOT NULL, last_upload_at INTEGER NOT NULL)'
              ),
             this.db.prepare(
-                'CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_key ON sessions (key) WHERE key IS NOT NULL'
+               'CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_current_value ON sessions (current_value) WHERE current_value IS NOT NULL'
              ),
             this.db.prepare(
                 'CREATE TABLE IF NOT EXISTS updates (' +
@@ -51,34 +51,43 @@ class D1SessionStore {
       return this._ready;
    }
 
-    // Goal 4 & 6: create a new session, or reuse the one that owns `key`.
-    // When key is null a fresh session is always created.
-   async createOrReuseSession(key, now) {
+   async createOrReuseSession(uuid, value, now) {
       await this.ensureSchema();
-      if (key == null || key === '') {
+      const cutoff = now - SESSION_TTL_MS;
+      if (uuid) {
+         const known = await this.db
+            .prepare('SELECT id FROM sessions WHERE id = ? AND last_upload_at >= ?')
+            .bind(uuid, cutoff)
+            .first();
+         if (known) {
+            await this.db.prepare('UPDATE sessions SET current_value = ? WHERE id = ?').bind(value, known.id).run();
+            return known.id;
+         }
+      }
+      if (value == null) {
          const id = crypto.randomUUID();
          await this.db
-             .prepare('INSERT INTO sessions (id, key, created_at, last_upload_at) VALUES (?, NULL, ?, ?)')
+             .prepare('INSERT INTO sessions (id, current_value, created_at, last_upload_at) VALUES (?, NULL, ?, ?)')
              .bind(id, now, now)
              .run();
          return id;
       }
 
-      const existing = await this.db.prepare('SELECT id FROM sessions WHERE key = ?').bind(key).first();
+        const existing = await this.db
+          .prepare('SELECT id FROM sessions WHERE current_value = ? AND last_upload_at >= ?')
+          .bind(value, cutoff)
+         .first();
       if (existing) return existing.id;
 
       const id = crypto.randomUUID();
-      // INSERT OR IGNORE is race-safe with the partial unique index used for
-      // nullable keys. A targeted ON CONFLICT(key) clause cannot reference that
-      // partial index in SQLite/D1.
       await this.db
           .prepare(
-          'INSERT OR IGNORE INTO sessions (id, key, created_at, last_upload_at) VALUES (?, ?, ?, ?)'
+           'INSERT OR IGNORE INTO sessions (id, current_value, created_at, last_upload_at) VALUES (?, ?, ?, ?)'
           )
-          .bind(id, key, now, now)
+           .bind(id, value, now, now)
           .run();
 
-      const row = await this.db.prepare('SELECT id FROM sessions WHERE key = ?').bind(key).first();
+        const row = await this.db.prepare('SELECT id FROM sessions WHERE current_value = ?').bind(value).first();
       return row.id;
     }
 
@@ -144,19 +153,25 @@ class D1SessionStore {
 // ---------------------------------------------------------------------------
 class MemorySessionStore {
    constructor() {
-      this.sessions = new Map(); // id -> { key, created_at, last_upload_at }
+      this.sessions = new Map(); // id -> { current_value, created_at, last_upload_at }
       this.updates = new Map(); // id -> { id, session_id, value, rotation_at, expires_at, created_at }
       this._seq = 0;
     }
 
-   async createOrReuseSession(key, now) {
-      if (key != null && key !== '') {
+   async createOrReuseSession(uuid, value, now) {
+      const cutoff = now - SESSION_TTL_MS;
+      const known = uuid && this.sessions.get(uuid);
+      if (known && known.last_upload_at >= cutoff) {
+         known.current_value = value;
+         return known.id;
+      }
+      if (value != null) {
          for (const s of this.sessions.values()) {
-            if (s.key === key) return s.id;
+            if (s.current_value === value && s.last_upload_at >= cutoff) return s.id;
           }
       }
       const id = crypto.randomUUID();
-      this.sessions.set(id, { id, key: key ?? null, created_at: now, last_upload_at: now });
+      this.sessions.set(id, { id, current_value: value ?? null, created_at: now, last_upload_at: now });
       return id;
    }
 

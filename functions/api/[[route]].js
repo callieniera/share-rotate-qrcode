@@ -87,7 +87,7 @@ async function handleCreateOrUpdate(request, env) {
 	}
 
 	const now = Date.now();
-	const key = typeof body.key === "string" && body.key.trim() !== "" ? body.key.trim() : null;
+	const requestedUuid = typeof body.uuid === "string" && body.uuid.trim() !== "" ? body.uuid.trim() : null;
 
 	// `value` is the decoded QR payload. A present but null/undefined value is
 	// rejected; an empty string is allowed (a QR may legitimately decode to "").
@@ -97,13 +97,12 @@ async function handleCreateOrUpdate(request, env) {
 	const value = String(body.value);
 
 	const store = storeFor(env);
-	const uuid = await store.createOrReuseSession(key, now);
+	const uuid = await store.createOrReuseSession(requestedUuid, value, now);
 	await store.appendUpdate(uuid, normalizeUpdate(body, now), now);
 	const lastUploadAt = await store.getLastUploadAt(uuid);
 
 	return json(200, {
 		uuid,
-		key: key ?? null,
 		status: sessionStatus(lastUploadAt, now),
 		createdAt: now,
 		lastUploadAt,

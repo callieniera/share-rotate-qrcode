@@ -31,17 +31,22 @@ async function call(c) {
 
 console.log("\n[POST /api/sessions] create");
 {
-	const r = await call(ctx("/api/sessions", { method: "POST", body: { key: "room-7", value: "OTC-A", rotationAt: 1, expiresAt: 9e13 } }));
+	const r = await call(ctx("/api/sessions", { method: "POST", body: { value: "OTC-A", rotationAt: 1, expiresAt: 9e13 } }));
 	assert(r.status === 200, "POST returns 200");
 	assert(typeof r.json.uuid === "string" && r.json.uuid.length > 0, "returns a uuid");
 	assert(r.json.status === "active", "status active");
 	globalThis.__uuid = r.json.uuid;
 }
 
-console.log("\n[POST /api/sessions] same key -> same uuid (goal 6)");
+console.log("\n[POST /api/sessions] uuid reuse updates current value");
 {
-	const r = await call(ctx("/api/sessions", { method: "POST", body: { key: "room-7", value: "OTC-B", rotationAt: 2, expiresAt: 9e13 } }));
-	assert(r.json.uuid === globalThis.__uuid, "same key reuses same uuid");
+	const r = await call(ctx("/api/sessions", { method: "POST", body: { uuid: globalThis.__uuid, value: "OTC-B", rotationAt: 2, expiresAt: 9e13 } }));
+	assert(r.json.uuid === globalThis.__uuid, "active uuid is reused");
+	assert(!Object.prototype.hasOwnProperty.call(r.json, "key"), "response has no key field");
+	const otherScanner = await call(ctx("/api/sessions", { method: "POST", body: { value: "OTC-B" } }));
+	assert(otherScanner.json.uuid === globalThis.__uuid, "second scanner matches current QR value");
+	const oldQr = await call(ctx("/api/sessions", { method: "POST", body: { value: "OTC-A" } }));
+	assert(oldQr.json.uuid !== globalThis.__uuid, "old QR value does not match rotated session");
 }
 
 console.log("\n[GET /api/sessions/:uuid] latest");
@@ -60,7 +65,7 @@ console.log("\n[GET poll] immediate unchanged then changed (goal 5)");
 	assert(unchanged.json.status === "unchanged", "poll since latest -> unchanged");
 	assert(Date.now() - startedAt < 500, "unchanged poll returns immediately");
 	// upload a new value
-	await call(ctx("/api/sessions", { method: "POST", body: { key: "room-7", value: "OTC-C" } }));
+	await call(ctx("/api/sessions", { method: "POST", body: { uuid: globalThis.__uuid, value: "OTC-C" } }));
 	const changed = await call(ctx(`/api/sessions/${globalThis.__uuid}/poll?since=${globalThis.__lastId}&wait=0`));
 	assert(changed.json.status === "changed", "poll after new upload -> changed");
 	assert(changed.json.update.value === "OTC-C", "changed update has new value");

@@ -1,10 +1,10 @@
 # share-rotate-qrcode
 
 Share a **rotating QR code** across devices using a browser camera scanner, backed by
-**Cloudflare Pages + D1** (free-tier first).
+**Cloudflare Pages + D1**.
 
 - A **scanner** points a device camera at a QR that rotates ~every 30s. The QR is decoded
-   and the **expiry text printed beneath it is OCR'd — entirely in the browser**. The
+   and the **expiry text printed beneath it is OCR'd entirely in the browser**. The
    decoded payload is uploaded to a **shared session UUID**.
 - A **viewer** (non-scanning user) opens a shareable link and **polls** for the latest
    value.
@@ -12,7 +12,7 @@ Share a **rotating QR code** across devices using a browser camera scanner, back
    scanner — and a session **expires after 5 minutes** of no uploads.
 
 > No camera frames ever leave the device. The server only ever receives the decoded
-> text + parsed expiry + a session key.
+> text + parsed expiry. The scanner UUID is kept in memory only.
 
 ---
 
@@ -40,9 +40,6 @@ Open the scanner at **https** or **localhost** (the camera needs a secure contex
 > Without a D1 binding the API automatically falls back to an **in-memory** store, so the
 > whole flow is runnable with zero cloud setup. State is lost on restart.
 
-The scanner requires a visible QR before it uploads. If no QR is decoded for 10 seconds,
-it warns the operator; supported devices expose a camera zoom control.
-
 ## Deploy
 
 ```bash
@@ -68,22 +65,21 @@ with `SWEEP_SECRET` (see `.dev.vars.example`). Without a secret the endpoint is 
 
 ## API reference
 
-All endpoints are under `/api`. Responses are JSON. `X-Content-Type-Options` etc. are
-not set; CORS is open (`*`) for read/upload.
+All endpoints are under `/api`. Responses are JSON. CORS is open (`*`) for read/upload.
 
 ### `POST /api/sessions`
 Create-or-reuse a session and append an update.
 
 ```json
 {
-  "key": "room-7",          // optional; omit to always create a new session
+   "uuid": "existing-session-uuid", // optional; reuse this active session first
   "value": "OTC-1234-56",   // required; decoded QR text
   "rotationAt": 1893456000000, // optional epoch ms of this rotation
   "expiresAt": 1893456180000    // optional epoch ms parsed from OCR'd expiry text
 }
 ```
 
-→ `200 { uuid, key, status, createdAt, lastUploadAt }`
+→ `200 { uuid, status, createdAt, lastUploadAt }`
 
 ### `GET /api/sessions/:uuid`
 Latest value + status. `status` is `active | expired | waiting`.
@@ -97,7 +93,7 @@ Normal poll. Checks once and returns the next newer update, or
 
 The consumer polls one second before an explicit future `update.expiresAt`. When no
 valid QR expiry is available, it polls every 10 seconds for the first minute, then
-every 30 seconds, until the server reports the UUID's five-minute inactivity expiry.
+every 30 seconds, until the server reports the UUID's 30-minute inactivity expiry.
 
 ### `POST /api/sweep`  *(optional, secret-gated)*
 Purge sessions/updates older than `SESSION_TTL_MS`. Requires `SWEEP_SECRET`
@@ -132,12 +128,3 @@ public/app.css     styling
 - **Camera zoom / no-QR warning** — zoom is enabled when the active track exposes a zoom
    capability; otherwise scanning remains available and a no-QR warning appears after 10s.
 - **TTL** — `SESSION_TTL_MS` in `functions/api/db.js` (default 5 min).
-
-## Known limitations
-
-- **OCR accuracy** on a moving, low-res camera strip is not perfect; failed reads keep
-   the last good `expiresAt`. OCR is throttled and only runs on (re)detection.
-- **Cross-device sharing** needs an explicit shared-key protocol; the scanner currently
-   keeps its generated device key internal.
-- **Polling** uses normal requests with client-side scheduling; move to a dedicated
-   Worker or add a WebSocket for higher scale.

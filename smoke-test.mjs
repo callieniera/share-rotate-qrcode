@@ -15,21 +15,34 @@ function assert(cond, msg) {
 // No env -> in-memory store (same one the API would fall back to).
 const store = storeFor({});
 
-console.log("\n[1] create-or-reuse by key (goals 4 & 6)");
+console.log("\n[1] create-or-reuse by current QR value");
 {
-	const a = await store.createOrReuseSession("room-7", 1000);
-	const b = await store.createOrReuseSession("room-7", 2000);
-	assert(a === b, "same key -> same session id");
-	const c = await store.createOrReuseSession("room-8", 3000);
-	assert(c !== a, "different key -> different session id");
-	const k1 = await store.createOrReuseSession(null, 4000);
-	const k2 = await store.createOrReuseSession(null, 5000);
-	assert(k1 !== k2, "keyless -> always a new session");
+	const a = await store.createOrReuseSession(null, "qr-a", 1000);
+	const b = await store.createOrReuseSession(null, "qr-a", 2000);
+	assert(a === b, "same current QR value -> same session id");
+	const c = await store.createOrReuseSession(null, "qr-b", 3000);
+	assert(c !== a, "different current QR value -> different session id");
+	const k1 = await store.createOrReuseSession(null, null, 4000);
+	const k2 = await store.createOrReuseSession(null, null, 5000);
+	assert(k1 !== k2, "empty values -> always a new session");
+}
+
+console.log("\n[1b] prefer uuid, then active current-value match");
+{
+	const original = await store.createOrReuseSession(null, "qr-old", 6000);
+	const byUuid = await store.createOrReuseSession(original, "qr-new", 7000);
+	assert(byUuid === original, "active client uuid wins over current-value match");
+	const byValue = await store.createOrReuseSession(null, "qr-new", 8000);
+	assert(byValue === original, "active current value reuses uuid");
+	const oldValue = await store.createOrReuseSession(null, "qr-old", 8001);
+	assert(oldValue !== original, "previous QR value no longer matches");
+	const replacement = await store.createOrReuseSession(null, "qr-new", 6000 + SESSION_TTL_MS + 1);
+	assert(replacement !== original, "expired current value gets a new uuid");
 }
 
 console.log("\n[2] append + latest (goal 1/4 payload)");
 {
-	const uuid = await store.createOrReuseSession("room-7", 1000);
+	const uuid = await store.createOrReuseSession(null, "room-7", 1000);
 	await store.appendUpdate(uuid, normalizeUpdate({ value: "OTC-1", rotationAt: 1000, expiresAt: 9e13 }, 1000), 1000);
 	await store.appendUpdate(uuid, normalizeUpdate({ value: "OTC-2", rotationAt: 2000, expiresAt: 9e13 }, 2000), 2000);
 	const latest = await store.getLatest(uuid);
@@ -54,9 +67,9 @@ console.log("\n[3] TTL / expiry status (goal 7)");
 
 console.log("\n[4] sweep purges expired (goal 7 cleanup)");
 {
-	const s1 = await store.createOrReuseSession("sweep-fresh", 1000);
+	const s1 = await store.createOrReuseSession(null, "sweep-fresh", 1000);
 	await store.appendUpdate(s1, normalizeUpdate({ value: "f" }, 1000), 1000);
-	const s2 = await store.createOrReuseSession("sweep-stale", 1000);
+	const s2 = await store.createOrReuseSession(null, "sweep-stale", 1000);
 	await store.appendUpdate(s2, normalizeUpdate({ value: "s" }, 1000), 1000);
 	// Force s2 to look old by sweeping with a now well past its last_upload_at.
 	const now = 1000 + SESSION_TTL_MS + 1000;
