@@ -91,14 +91,12 @@ function resolveKey(value) {
 //   - otherwise try Date.parse on a cleaned string
 function parseExpiry(raw) {
 	if (raw == null) return null;
+	const seconds = String(raw).match(/(\d+)\s*s\s*e\s*c\s*(?:o|0)\s*n\s*(?:d|c\s*[iIl1])\s*s?\b/i);
+	if (seconds) return Date.now() + Number(seconds[1]) * 1000;
 	const s = String(raw)
 		.replace(/[^0-9:\.\-]/g, " ")
 		.replace(/\s+/g, " ")
 		.trim();
-	const relative = String(raw).match(
-		/(?:expire|expires|expiration)\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b|QR\s+code\s+valid\s+for\s*:\s*(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i
-	);
-	if (relative) return Date.now() + Number(relative[1] || relative[2]) * 1000;
 	if (s === "") return null;
 
 	// Pure digits -> epoch.
