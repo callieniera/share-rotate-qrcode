@@ -1,12 +1,11 @@
 // public/consumer.js
 //
 // Viewer client for a non-scanning user. It reads the session UUID from the URL
-// query (?uuid=<uuid>), fetches the latest value, then *short-polls* the server for
-// newer updates (goal 5: "long-pulling to get the latest decoded data").
+// query (?uuid=<uuid>), fetches the latest value, then polls the server for newer
+// updates according to the current QR expiry.
 //
 // Free-tier notes:
-//   - Polling is a short request (~2.5s server hold, capped to <10s on the server),
-//     not an open-ended connection, so it stays within the Pages request budget.
+//   - Polling uses normal short requests and backs off when there is no valid QR.
 //   - Polling PAUSES when the tab is hidden and resumes on focus, saving requests.
 //   - When the server reports the session expired (goal 7), polling stops.
 
@@ -27,7 +26,16 @@ const uuid = getUuid();
 let lastId = null; // most recent update id we've seen (poll `since`)
 let timer = null;
 let stopped = false;
-const POLL_WAIT_SEC = 3; // client-requested server hold window
+let hasRenderedUpdate = false;
+let currentExpiresAt = null;
+let expiredRefreshes = 0;
+let updatedAgeTimer = null;
+let currentValue = null;
+let currentSessionExpired = false;
+const VALID_DATA_LEAD_MS = 1000;
+const EXPIRED_REFRESH_INTERVAL_MS = 2 * 1000;
+const MAX_EXPIRED_REFRESHES = 5;
+const NO_DATA_REFRESH_INTERVAL_MS = 10 * 1000;
 
 const historyLines = [];
 function pushHistory(line) {
@@ -36,76 +44,152 @@ function pushHistory(line) {
 	$("history").textContent = historyLines.join("\n");
 }
 
-function setStatus(status) {
+function setBadge(status) {
 	const badge = $("badge");
-	const map = {
-		active: ["active", "active"],
-		changed: ["active", "active"],
-		unchanged: ["active", "live"],
-		expired: ["expired", "expired"],
-		waiting: ["waiting", "waiting for first scan"],
-		error: ["error", "error"],
-	};
-	const [cls, label] = map[status] || map.waiting;
-	badge.textContent = label;
-	badge.className = "badge " + cls;
+	const normalized = status === "active" ? "active" : status === "connecting" ? "connecting" : "expired";
+	badge.textContent = normalized[0].toUpperCase() + normalized.slice(1);
+	badge.className = "badge " + normalized;
+}
+
+function updateDataActions() {
+	const actions = $("dataActions");
+	const copyButton = $("copyText");
+	const openButton = $("openLink");
+	if (!actions || !copyButton || !openButton) return;
+	const valid = currentValue != null && !currentSessionExpired && (currentExpiresAt == null || currentExpiresAt > Date.now());
+	const url = valid ? getHttpUrl(currentValue) : null;
+	copyButton.disabled = !valid;
+	openButton.disabled = !url;
+}
+
+function getHttpUrl(value) {
+	try {
+		const url = new URL(String(value));
+		return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+	} catch (_) {
+		return null;
+	}
 }
 
 function render(view) {
 	if (!view || !view.uuid) return;
+	currentSessionExpired = view.status === "expired";
 
 	if (view.update && view.update.id != null) {
 		const u = view.update;
+		hasRenderedUpdate = true;
 		lastId = u.id;
+		currentValue = u.value == null ? null : String(u.value);
 		$("value").textContent = u.value == null ? "—" : u.value;
 		$("updated").textContent = SHARE.formatRelative(u.at);
+		$("updated").dataset.timestamp = String(u.at);
+		startUpdatedAgeTimer();
 		if (view.status === "changed") {
 			pushHistory(SHARE.formatClock(u.at) + "  " + String(u.value == null ? "" : u.value).slice(0, 120));
 		}
-	} else {
+	} else if (!hasRenderedUpdate || view.status === "expired") {
 		$("value").textContent = view.status === "expired" ? "Session expired" : "Waiting for the first scan…";
 	}
-	setStatus(view.status);
+	if (view.update) {
+		const expiresAt = Number(view.update.expiresAt);
+		if (Number.isFinite(expiresAt)) {
+			currentExpiresAt = expiresAt;
+			if (expiresAt > Date.now()) expiredRefreshes = 0;
+		} else {
+			currentExpiresAt = null;
+		}
+	}
+	setBadge(view.status === "expired" || currentExpiresAt == null || currentExpiresAt <= Date.now() ? "expired" : "active");
+	updateDataActions();
+}
+
+function updateUpdatedAge() {
+	updateDataActions();
+	if (!hasRenderedUpdate || currentExpiresAt == null || currentExpiresAt <= Date.now()) return;
+	const timestamp = Number($("updated").dataset.timestamp);
+	if (Number.isFinite(timestamp)) $("updated").textContent = SHARE.formatRelative(timestamp);
+}
+
+function startUpdatedAgeTimer() {
+	if (updatedAgeTimer) return;
+	updatedAgeTimer = setInterval(updateUpdatedAge, 1000);
 }
 
 // --- Polling -----------------------------------------------------------------
+function scheduleNextPoll() {
+	if (stopped || document.hidden) return;
+	if (timer) clearTimeout(timer);
+
+	let delayMs;
+	if (currentExpiresAt != null && currentExpiresAt > Date.now()) {
+		delayMs = Math.max(0, currentExpiresAt - Date.now() - VALID_DATA_LEAD_MS);
+	} else if (currentExpiresAt != null && expiredRefreshes < MAX_EXPIRED_REFRESHES) {
+		expiredRefreshes += 1;
+		delayMs = EXPIRED_REFRESH_INTERVAL_MS;
+	} else {
+		delayMs = NO_DATA_REFRESH_INTERVAL_MS;
+	}
+	timer = setTimeout(poll, delayMs);
+}
+
 async function poll() {
 	if (stopped || !uuid) return;
+	setBadge("connecting");
 	try {
 		const since = lastId == null ? "" : String(lastId);
-		const url = SHARE.apiUrl(`/api/sessions/${encodeURIComponent(uuid)}/poll?since=${since}&wait=${POLL_WAIT_SEC}`);
+		const url = SHARE.apiUrl(`/api/sessions/${encodeURIComponent(uuid)}/poll?since=${since}`);
 		const res = await fetch(url, { headers: { Accept: "application/json" } });
 		if (res.status === 404) {
 			stopped = true;
-			setStatus("error");
+			setBadge("expired");
 			$("value").textContent = "Session not found (bad or already expired UUID).";
 			pushHistory("This session UUID does not exist or has expired.");
 			return;
 		}
+		if (!res.ok) throw new Error("HTTP " + res.status);
 		const view = await res.json();
 		render(view);
 
 		// Stop when the session has gone quiet for the TTL (goal 7).
 		if (view.status === "expired") {
 			stopped = true;
+			setBadge("expired");
 			pushHistory("No scanner has uploaded for 5 minutes. The session has expired.");
 			return;
 		}
 	} catch (e) {
 		// Transient network error: keep polling but surface it briefly.
-		setStatus("error");
+		setBadge("connecting");
 		pushHistory("network error: " + e.message);
 	}
-	// Schedule the next poll. Use a short gap so a `changed`/`unchanged` response
-	// triggers a fresh request quickly; the server holds the request up to its
-	// window so we are not busy-looping.
-	timer = setTimeout(poll, 250);
+	scheduleNextPoll();
 }
 
 function startPolling() {
 	if (stopped) return;
 	if (timer) clearTimeout(timer);
+	timer = null;
 	poll();
+}
+
+const copyButton = $("copyText");
+if (copyButton) {
+	copyButton.addEventListener("click", async () => {
+		if (currentValue == null) return;
+		const copied = await SHARE.copyText(currentValue);
+		const original = copyButton.textContent;
+		copyButton.textContent = copied === false ? "Copy failed" : "Copied";
+		setTimeout(() => (copyButton.textContent = original), 1200);
+	});
+}
+
+const openButton = $("openLink");
+if (openButton) {
+	openButton.addEventListener("click", () => {
+		const url = getHttpUrl(currentValue);
+		const valid = currentValue != null && !currentSessionExpired && (currentExpiresAt == null || currentExpiresAt > Date.now());
+		if (url && valid) window.open(url.href, "_blank", "noopener,noreferrer");
+	});
 }
 
 // Pause when the tab is hidden (saves requests), resume on focus.
@@ -125,7 +209,7 @@ async function boot() {
 		pushHistory("Get the link from a scanner device, then open it here.");
 		return;
 	}
-	setStatus("waiting");
+	setBadge("connecting");
 
 	// Initial immediate fetch so the page shows data without waiting for a poll
 	// window; also validates the UUID exists.
@@ -135,7 +219,7 @@ async function boot() {
 		});
 		if (res.status === 404) {
 			stopped = true;
-			setStatus("error");
+			setBadge("expired");
 			$("value").textContent = "Session not found.";
 			pushHistory("This session UUID does not exist yet. Open the scanner and copy a fresh link.");
 			return;
@@ -143,7 +227,7 @@ async function boot() {
 		const view = await res.json();
 		render(view);
 	} catch (e) {
-		setStatus("error");
+		setBadge("connecting");
 	}
 
 	startPolling();

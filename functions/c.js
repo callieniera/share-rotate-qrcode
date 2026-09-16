@@ -9,10 +9,14 @@ const CONSUMER_HTML = `<!DOCTYPE html>
 </head>
 <body>
 <div class="wrap">
-<header><h1>🔗 Viewer</h1></header>
+<header><h1>Viewer</h1></header>
 <section class="panel">
-<div class="row between" style="margin-bottom:12px"><span class="badge waiting" id="badge">connecting…</span><span class="status" id="updated">—</span></div>
+<div class="row between" style="margin-bottom:12px"><span class="badge connecting" id="badge">Connecting...</span><span class="status" id="updated">—</span></div>
 <div class="value-box" id="value">Waiting for the first scan…</div>
+<div class="row" id="dataActions" style="margin-top:12px">
+<button id="copyText" class="small" type="button">Copy text</button>
+<button id="openLink" class="small" type="button">Open link</button>
+</div>
 </section>
 <details class="panel disclosure"><summary>History</summary><pre id="history" class="value-box" style="max-height:160px;overflow:auto;white-space:pre"></pre></details>
 </div>

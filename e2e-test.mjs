@@ -53,10 +53,12 @@ console.log("\n[GET /api/sessions/:uuid] latest");
 	assert(r.json.status === "active", "GET status active");
 }
 
-console.log("\n[GET poll] unchanged then changed (goal 5)");
+console.log("\n[GET poll] immediate unchanged then changed (goal 5)");
 {
+	const startedAt = Date.now();
 	const unchanged = await call(ctx(`/api/sessions/${globalThis.__uuid}/poll?since=${globalThis.__lastId}&wait=0`));
 	assert(unchanged.json.status === "unchanged", "poll since latest -> unchanged");
+	assert(Date.now() - startedAt < 500, "unchanged poll returns immediately");
 	// upload a new value
 	await call(ctx("/api/sessions", { method: "POST", body: { key: "room-7", value: "OTC-C" } }));
 	const changed = await call(ctx(`/api/sessions/${globalThis.__uuid}/poll?since=${globalThis.__lastId}&wait=0`));

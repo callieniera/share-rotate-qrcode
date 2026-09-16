@@ -186,6 +186,10 @@ video {
 	color: var(--ok);
 	border-color: var(--ok);
 }
+.badge.connecting {
+	color: var(--warn);
+	border-color: var(--warn);
+}
 .badge.expired,
 .badge.error {
 	color: var(--err);

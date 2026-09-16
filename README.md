@@ -90,11 +90,14 @@ Latest value + status. `status` is `active | expired | waiting`.
 → `200 { uuid, status, update, nextExpiry, lastUploadAt, createdAt, ttlMs, now }`
 → `404 { error: "session_not_found" }`
 
-### `GET /api/sessions/:uuid/poll?since=<updateId>&wait=<sec>`
-Short long-poll. Returns the next newer update, or `status: "unchanged"`. The server
-holds the request up to `wait` seconds (capped < 10s) and to the session's remaining
-TTL.
+### `GET /api/sessions/:uuid/poll?since=<updateId>`
+Normal poll. Checks once and returns the next newer update, or
+`status: "unchanged"`; the request is not held open by the server.
 → `200 { status: "changed"|"unchanged"|"expired"|"waiting", update?, nextExpiry, ... }`
+
+The consumer polls one second before an explicit future `update.expiresAt`. When no
+valid QR expiry is available, it polls every 10 seconds for the first minute, then
+every 30 seconds, until the server reports the UUID's five-minute inactivity expiry.
 
 ### `POST /api/sweep`  *(optional, secret-gated)*
 Purge sessions/updates older than `SESSION_TTL_MS`. Requires `SWEEP_SECRET`
@@ -136,5 +139,5 @@ public/app.css     styling
    the last good `expiresAt`. OCR is throttled and only runs on (re)detection.
 - **Cross-device sharing** needs an explicit shared-key protocol; the scanner currently
    keeps its generated device key internal.
-- **Long-poll** is a capped short poll, not a WebSocket — fine for low scale; move to a
-   dedicated Worker or add a WebSocket for higher scale.
+- **Polling** uses normal requests with client-side scheduling; move to a dedicated
+   Worker or add a WebSocket for higher scale.

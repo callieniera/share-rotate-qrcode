@@ -72,6 +72,7 @@ let lastOcrStart = 0;
 let current = { value: null, rotationAt: null, expiresAt: null, expiryFallback: false };
 let pendingUpload = false;
 let lastUploadAt = 0;
+let uploadAgeTimer = null;
 let lastValue = null;
 let currentUuid = null;
 let lastOcrRaw = null;
@@ -368,6 +369,7 @@ async function upload() {
 		const data = await res.json();
 		currentUuid = data.uuid;
 		lastUploadAt = Date.now();
+		startUploadAgeTimer();
 		pendingUpload = false;
 		log("uploaded -> session " + data.uuid + " (" + data.status + ")");
 		renderSession();
@@ -379,6 +381,16 @@ async function upload() {
 }
 
 let heartbeat = null;
+function updateLastUpload() {
+	if (!lastUploadAt || !hasValidQr()) return;
+	$("lastUpload").textContent = "Last upload " + SHARE.formatRelative(lastUploadAt);
+}
+
+function startUploadAgeTimer() {
+	if (uploadAgeTimer) return;
+	uploadAgeTimer = setInterval(updateLastUpload, 1000);
+}
+
 function scheduleHeartbeat() {
 	if (heartbeat) return;
 	heartbeat = setInterval(() => {

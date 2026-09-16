@@ -6,12 +6,12 @@
 // Endpoints:
 //   POST /api/sessions                 -> create-or-reuse a session + append an update
 //   GET  /api/sessions/:uuid           -> latest value + status
-//   GET  /api/sessions/:uuid/poll      -> long-poll (timeout) for newer updates
+//   GET  /api/sessions/:uuid/poll      -> immediate check for newer updates
 //   POST /api/sweep                    -> (optional, secret-gated) purge expired rows
 //   GET  /api/health                   -> liveness + backend probe
 //
-// Everything is free-tier friendly: no request is ever held longer than ~10s, and
-// the "long-poll" below degrades to a fast poll when the client's budget is small.
+// Poll requests are intentionally short-lived; the client chooses when to request
+// the next check based on QR validity and session state.
 
 import { storeFor, normalizeUpdate, toConsumerView, sessionStatus, SESSION_TTL_MS } from "./db.js";
 
@@ -31,13 +31,6 @@ function json(status, body, extraHeaders = {}) {
 function notFound() {
 	return json(404, { error: "not_found" });
 }
-
-// The poll window the server is willing to hold, clamped to a safe free-tier bound.
-// The client asks for a window via `?wait=` (seconds); we cap it so a slow or hung
-// client can never exhaust the Pages execution budget.
-const MAX_POLL_WAIT_MS = 10000;
-const DEFAULT_POLL_WAIT_MS = 2500;
-const MIN_POLL_WAIT_MS = 500;
 
 export async function onRequest(context) {
 	const { request, env, params } = context;
@@ -131,11 +124,8 @@ async function handleGet(uuid, env) {
 }
 
 // --- GET /api/sessions/:uuid/poll -------------------------------------------
-// A pragmatic "long-poll" for the free tier: we check for a newer update, and if
-// there is none we *hold* the request for the client-requested window (capped) so
-// the client does not have to poll every second. If a newer update appears within
-// the window we return immediately. This bounds each request well under the Pages
-// execution limit while keeping client-side request volume low.
+// A normal poll: check once and return immediately. The client controls request
+// cadence because QR validity varies by update.
 async function handlePoll(uuid, url, env) {
 	const store = storeFor(env);
 	const now = Date.now();
@@ -151,32 +141,10 @@ async function handlePoll(uuid, url, env) {
 	}
 
 	const since = url.searchParams.get("since");
-	const checkNow = () => store.getUpdateAfter(uuid, since).then((u) => u || null);
-
-	// Initial check (covers the common "there already is a newer update" case).
-	let row = await checkNow();
+	const row = await store.getUpdateAfter(uuid, since);
 	if (row) return changed(uuid, row, now, store);
 
-	// Determine how long to hold the request.
-	const waitSec = Number(url.searchParams.get("wait"));
-	let waitMs = Number.isFinite(waitSec) && waitSec > 0 ? Math.round(waitSec * 1000) : DEFAULT_POLL_WAIT_MS;
-	waitMs = Math.max(MIN_POLL_WAIT_MS, Math.min(waitMs, MAX_POLL_WAIT_MS));
-
-	// Also cap to how long until this session itself expires, so we don't hold past TTL.
-	const timeToExpire = lastUploadAt + SESSION_TTL_MS - Date.now();
-	if (timeToExpire <= 0) {
-		return json(200, toConsumerView(uuid, await store.getLatest(uuid), lastUploadAt, Date.now()), {
-			"Cache-Control": "no-store",
-		});
-	}
-	waitMs = Math.min(waitMs, Math.max(MIN_POLL_WAIT_MS, timeToExpire));
-
-	// Sleep (interruptible-ish), then re-check once.
-	await sleep(waitMs);
-	row = await checkNow();
-	if (row) return changed(uuid, row, now, store);
-
-	// Nothing new within the window -> unchanged.
+	// Nothing newer is available right now.
 	const view = toConsumerView(uuid, null, lastUploadAt, Date.now());
 	return json(
 		200,
