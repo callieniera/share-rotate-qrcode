@@ -9,8 +9,7 @@ DROP TABLE IF EXISTS sessions;
 -- sessions : one row per shareable session. `current_value` is the latest QR
 -- payload associated with the session and is used for exact-value lookup.
 -- updates  : append-only log of decoded values pushed to a session, most recent
---            first. `last_upload_at` on the session drives the 30-minute expiry
---            (goal 7).
+--            first. `last_upload_at` on the session drives the 30-minute expiry.
 
 CREATE TABLE IF NOT EXISTS sessions (
   id             TEXT PRIMARY KEY,            -- session UUID (the shareable secret)

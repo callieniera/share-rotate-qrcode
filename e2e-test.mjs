@@ -62,7 +62,7 @@ console.log("\n[GET /api/sessions/:uuid] latest");
 	assert(r.json.status === "active", "GET status active");
 }
 
-console.log("\n[GET poll] immediate unchanged then changed (goal 5)");
+console.log("\n[GET poll] immediate unchanged then changed");
 {
 	const startedAt = Date.now();
 	const unchanged = await call(ctx(`/api/sessions/${globalThis.__uuid}/poll?since=${globalThis.__lastId}&wait=0`));

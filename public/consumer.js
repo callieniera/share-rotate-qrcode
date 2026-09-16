@@ -7,7 +7,7 @@
 // Free-tier notes:
 //   - Polling uses normal short requests and backs off when there is no valid QR.
 //   - Polling PAUSES when the tab is hidden and resumes on focus, saving requests.
-//   - When the server reports the session expired (goal 7), polling stops.
+//   - When the server reports the session expired, polling stops.
 
 const $ = (id) => document.getElementById(id);
 
@@ -154,7 +154,7 @@ async function poll() {
 		const view = await res.json();
 		render(view);
 
-		// Stop when the session has gone quiet for the TTL (goal 7).
+		// Stop when the session has gone quiet for the TTL.
 		if (view.status === "expired") {
 			stopped = true;
 			setBadge("expired");

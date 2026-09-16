@@ -11,7 +11,7 @@
 // All queries funnel through `storeFor(env)` which picks the backend and returns an
 // object implementing the small interface documented on `SessionStore`.
 
-// Goal 7: a session with no upload for this long is considered expired.
+// A session with no upload for this long is considered expired.
 export const SESSION_TTL_MS = 30 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
@@ -274,7 +274,7 @@ export function normalizeUpdate(raw, now) {
     };
 }
 
-// Goal 7: a session is expired when it has gone quiet for SESSION_TTL_MS.
+// A session is expired when it has gone quiet for SESSION_TTL_MS.
 export function sessionStatus(lastUploadAt, now = Date.now()) {
    if (lastUploadAt == null) return 'waiting';
    if (now - lastUploadAt > SESSION_TTL_MS) return 'expired';

@@ -40,7 +40,7 @@ console.log("\n[1b] prefer uuid, then active current-value match");
 	assert(replacement !== original, "expired current value gets a new uuid");
 }
 
-console.log("\n[2] append + latest (goal 1/4 payload)");
+console.log("\n[2] append + latest");
 {
 	const uuid = await store.createOrReuseSession(null, "room-7", 1000);
 	await store.appendUpdate(uuid, normalizeUpdate({ value: "OTC-1", rotationAt: 1000, expiresAt: 9e13 }, 1000), 1000);
@@ -54,7 +54,7 @@ console.log("\n[2] append + latest (goal 1/4 payload)");
 	assert(!none, "getUpdateAfter(since=2) returns nothing new");
 }
 
-console.log("\n[3] TTL / expiry status (goal 7)");
+console.log("\n[3] TTL / expiry status");
 {
 	const now = 100000;
 	assert(sessionStatus(now - 1000, now) === "active", "fresh session is active");
@@ -65,7 +65,7 @@ console.log("\n[3] TTL / expiry status (goal 7)");
 	assert(view.status === "active" && view.nextExpiry === now - 100 + SESSION_TTL_MS, "active view has nextExpiry");
 }
 
-console.log("\n[4] sweep purges expired (goal 7 cleanup)");
+console.log("\n[4] sweep purges expired");
 {
 	const s1 = await store.createOrReuseSession(null, "sweep-fresh", 1000);
 	await store.appendUpdate(s1, normalizeUpdate({ value: "f" }, 1000), 1000);
