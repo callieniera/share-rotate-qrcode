@@ -79,7 +79,7 @@
 		// GitHub repository. Leave "" to hide the link.
 		repoUrl: "https://github.com/callieniera/share-rotate-qrcode",
 		// Shown next to the repo link, e.g. "v1.0.0". Leave "" to hide.
-		version: "1.0.0",
+		version: "0.1.0",
 		// Display name shown in the footer. Leave "" to hide.
 		name: "share-rotate-qrcode",
 	};

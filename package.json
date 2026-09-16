@@ -1,18 +1,18 @@
 {
-  "name": "share-rotate-qrcode",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Share a rotating QR code via a browser camera scanner, backed by Cloudflare Pages + D1. A scanner decodes the QR + OCR's the expiry text (client-side) and uploads updates to a shared session UUID; a consumer polls for the latest value.",
-  "type": "module",
-  "scripts": {
-    "dev": "wrangler pages dev public --port 8787",
-    "deploy": "node scripts/deploy.mjs",
-    "d1:create": "wrangler d1 create share-rotate-qrcode-db",
-    "d1:local": "wrangler d1 execute share-rotate-qrcode-db --local --file=migrations/0001_init.sql",
-    "d1:remote": "wrangler d1 execute share-rotate-qrcode-db --remote --file=migrations/0001_init.sql",
-    "test": "node smoke-test.mjs && node e2e-test.mjs"
-  },
-  "devDependencies": {
-    "wrangler": "^3.99.0"
-  }
+	"name": "share-rotate-qrcode",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Share a rotating QR code via a browser camera scanner, backed by Cloudflare Pages + D1. A scanner decodes the QR + OCR's the expiry text (client-side) and uploads updates to a shared session UUID; a consumer polls for the latest value.",
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler pages dev public --port 8787",
+		"deploy": "node scripts/deploy.mjs",
+		"d1:create": "wrangler d1 create share-rotate-qrcode-db",
+		"d1:local": "wrangler d1 execute share-rotate-qrcode-db --local --file=migrations/0001_init.sql",
+		"d1:remote": "wrangler d1 execute share-rotate-qrcode-db --remote --file=migrations/0001_init.sql",
+		"test": "node smoke-test.mjs && node e2e-test.mjs"
+	},
+	"devDependencies": {
+		"wrangler": "^3.99.0"
+	}
 }
