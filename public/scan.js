@@ -482,7 +482,7 @@ function bindControls() {
 		const v = $("shareLink").value;
 		if (!v) return;
 		$("shareLink").select();
-		SHARE.copyText(v);
+		SHARE.shareURL(v);
 	};
 
 	const oc = $("ocrEnabled");

@@ -33,6 +33,17 @@
 		return Promise.resolve(ok);
 	}
 
+	async function shareURL(url) {
+		const shareData = { url: url };
+		if (navigator.canShare && navigator.canShare(shareData)) {
+			try {
+				await navigator.share(shareData);
+			} catch (err) {
+				if (err.name !== "AbortError") copyText(url);
+			}
+		} else copyText(url);
+	}
+
 	function escapeHtml(s) {
 		return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 	}
@@ -60,5 +71,5 @@
 		return d.toLocaleString();
 	}
 
-	window.SHARE = { apiUrl, copyText, escapeHtml, formatRelative, formatDur, formatClock, API_BASE };
+	window.SHARE = { shareURL, apiUrl, copyText, escapeHtml, formatRelative, formatDur, formatClock, API_BASE };
 })();
