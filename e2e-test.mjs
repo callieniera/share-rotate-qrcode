@@ -1,99 +1,99 @@
 // e2e-test.mjs — drive the real Pages Function handler in-process (no network).
 // Run: node e2e-test.mjs
-import { onRequest } from './functions/api/[[route]].js';
+import { onRequest } from "./functions/api/[[route]].js";
 
 let failures = 0;
 function assert(c, m) {
-   if (c) console.log('  ✓ ' + m);
-   else {
-      failures++;
-      console.error('  ✗ ' + m);
-   }
+	if (c) console.log("  ✓ " + m);
+	else {
+		failures++;
+		console.error("  ✗ " + m);
+	}
 }
 
-function ctx(path, { method = 'GET', body, env } = {}) {
-   const url = 'http://localhost' + path;
-   const req = new Request(url, {
-      method,
-      body: body != null ? JSON.stringify(body) : undefined,
-      headers: body != null ? { 'Content-Type': 'application/json' } : undefined,
-   });
-   return { request: req, env: env || {}, params: {} };
+function ctx(path, { method = "GET", body, env } = {}) {
+	const url = "http://localhost" + path;
+	const req = new Request(url, {
+		method,
+		body: body != null ? JSON.stringify(body) : undefined,
+		headers: body != null ? { "Content-Type": "application/json" } : undefined,
+	});
+	return { request: req, env: env || {}, params: {} };
 }
 async function call(c) {
-   const res = await onRequest(c);
-   let json = null;
-   try {
-      json = await res.json();
-     } catch (_) {}
-   return { status: res.status, json };
+	const res = await onRequest(c);
+	let json = null;
+	try {
+		json = await res.json();
+	} catch (_) {}
+	return { status: res.status, json };
 }
 
-console.log('\n[POST /api/sessions] create');
+console.log("\n[POST /api/sessions] create");
 {
-   const r = await call(ctx('/api/sessions', { method: 'POST', body: { key: 'room-7', value: 'OTC-A', rotationAt: 1, expiresAt: 9e13 } }));
-   assert(r.status === 200, 'POST returns 200');
-   assert(typeof r.json.uuid === 'string' && r.json.uuid.length > 0, 'returns a uuid');
-   assert(r.json.status === 'active', 'status active');
-   globalThis.__uuid = r.json.uuid;
+	const r = await call(ctx("/api/sessions", { method: "POST", body: { key: "room-7", value: "OTC-A", rotationAt: 1, expiresAt: 9e13 } }));
+	assert(r.status === 200, "POST returns 200");
+	assert(typeof r.json.uuid === "string" && r.json.uuid.length > 0, "returns a uuid");
+	assert(r.json.status === "active", "status active");
+	globalThis.__uuid = r.json.uuid;
 }
 
-console.log('\n[POST /api/sessions] same key -> same uuid (goal 6)');
+console.log("\n[POST /api/sessions] same key -> same uuid (goal 6)");
 {
-   const r = await call(ctx('/api/sessions', { method: 'POST', body: { key: 'room-7', value: 'OTC-B', rotationAt: 2, expiresAt: 9e13 } }));
-   assert(r.json.uuid === globalThis.__uuid, 'same key reuses same uuid');
+	const r = await call(ctx("/api/sessions", { method: "POST", body: { key: "room-7", value: "OTC-B", rotationAt: 2, expiresAt: 9e13 } }));
+	assert(r.json.uuid === globalThis.__uuid, "same key reuses same uuid");
 }
 
-console.log('\n[GET /api/sessions/:uuid] latest');
+console.log("\n[GET /api/sessions/:uuid] latest");
 {
-   const r = await call(ctx(`/api/sessions/${globalThis.__uuid}`));
-   assert(r.status === 200, 'GET returns 200');
-   assert(r.json.update.value === 'OTC-B', 'latest value is OTC-B');
-   globalThis.__lastId = r.json.update.id;
-   assert(r.json.status === 'active', 'GET status active');
+	const r = await call(ctx(`/api/sessions/${globalThis.__uuid}`));
+	assert(r.status === 200, "GET returns 200");
+	assert(r.json.update.value === "OTC-B", "latest value is OTC-B");
+	globalThis.__lastId = r.json.update.id;
+	assert(r.json.status === "active", "GET status active");
 }
 
-console.log('\n[GET poll] unchanged then changed (goal 5)');
+console.log("\n[GET poll] unchanged then changed (goal 5)");
 {
-   const unchanged = await call(ctx(`/api/sessions/${globalThis.__uuid}/poll?since=${globalThis.__lastId}&wait=0`));
-   assert(unchanged.json.status === 'unchanged', 'poll since latest -> unchanged');
-   // upload a new value
-   await call(ctx('/api/sessions', { method: 'POST', body: { key: 'room-7', value: 'OTC-C' } }));
-   const changed = await call(ctx(`/api/sessions/${globalThis.__uuid}/poll?since=${globalThis.__lastId}&wait=0`));
-   assert(changed.json.status === 'changed', 'poll after new upload -> changed');
-   assert(changed.json.update.value === 'OTC-C', 'changed update has new value');
+	const unchanged = await call(ctx(`/api/sessions/${globalThis.__uuid}/poll?since=${globalThis.__lastId}&wait=0`));
+	assert(unchanged.json.status === "unchanged", "poll since latest -> unchanged");
+	// upload a new value
+	await call(ctx("/api/sessions", { method: "POST", body: { key: "room-7", value: "OTC-C" } }));
+	const changed = await call(ctx(`/api/sessions/${globalThis.__uuid}/poll?since=${globalThis.__lastId}&wait=0`));
+	assert(changed.json.status === "changed", "poll after new upload -> changed");
+	assert(changed.json.update.value === "OTC-C", "changed update has new value");
 }
 
-console.log('\n[GET 404] unknown session');
+console.log("\n[GET 404] unknown session");
 {
-   const r = await call(ctx('/api/sessions/does-not-exist'));
-   assert(r.status === 404, 'unknown uuid -> 404');
+	const r = await call(ctx("/api/sessions/does-not-exist"));
+	assert(r.status === 404, "unknown uuid -> 404");
 }
 
-console.log('\n[POST 400] missing value');
+console.log("\n[POST 400] missing value");
 {
-   const r = await call(ctx('/api/sessions', { method: 'POST', body: { key: 'x' } }));
-   assert(r.status === 400, 'missing value -> 400');
+	const r = await call(ctx("/api/sessions", { method: "POST", body: { key: "x" } }));
+	assert(r.status === 400, "missing value -> 400");
 }
 
-console.log('\n[GET /api/health]');
+console.log("\n[GET /api/health]");
 {
-   const r = await call(ctx('/api/health'));
-   assert(r.status === 200 && r.json.ok === true, 'health ok');
-   assert(r.json.backend === 'memory', 'backend is memory (no env.DB)');
+	const r = await call(ctx("/api/health"));
+	assert(r.status === 200 && r.json.ok === true, "health ok");
+	assert(r.json.backend === "memory", "backend is memory (no env.DB)");
 }
 
-console.log('\n[POST /api/sweep] gated');
+console.log("\n[POST /api/sweep] gated");
 {
-   const r = await call(ctx('/api/sweep', { method: 'POST', body: {} }));
-   assert(r.status === 403, 'sweep disabled without secret');
+	const r = await call(ctx("/api/sweep", { method: "POST", body: {} }));
+	assert(r.status === 403, "sweep disabled without secret");
 }
 
-console.log('');
+console.log("");
 if (failures === 0) {
-   console.log('ALL E2E PASSED');
-   process.exit(0);
+	console.log("ALL E2E PASSED");
+	process.exit(0);
 } else {
-   console.log(failures + ' E2E FAILED');
-   process.exit(1);
+	console.log(failures + " E2E FAILED");
+	process.exit(1);
 }

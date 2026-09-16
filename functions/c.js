@@ -22,7 +22,7 @@ const CONSUMER_HTML = `<!DOCTYPE html>
 </html>`;
 
 export function onRequest() {
-   return new Response(CONSUMER_HTML, {
-      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
-   });
+	return new Response(CONSUMER_HTML, {
+		headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+	});
 }
