@@ -33,7 +33,7 @@ function loadConfig() {
 	return Object.assign(
 		{
 			ocrEnabled: true,
-			ocrHint: "expire in n secconds",
+			ocrHint: "QR code valid for: n seconds",
 		},
 		cfg
 	);
@@ -94,7 +94,9 @@ function parseExpiry(raw) {
 		.replace(/[^0-9:\.\-]/g, " ")
 		.replace(/\s+/g, " ")
 		.trim();
-	const relative = String(raw).match(/(?:expire|expires|expiration)\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b|QR\s+code\s+valid\s+for\s*:\s*(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i);
+	const relative = String(raw).match(
+		/(?:expire|expires|expiration)\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b|QR\s+code\s+valid\s+for\s*:\s*(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i
+	);
 	if (relative) return Date.now() + Number(relative[1] || relative[2]) * 1000;
 	if (s === "") return null;
 
@@ -262,7 +264,7 @@ function startOcr(location) {
 	ocrBusy = true;
 	lastOcrStart = now;
 	getOcrWorker()
-		.then((worker) => worker.recognize(region, { user_patterns: cfg.ocrHint || "expire in n secconds" }))
+		.then((worker) => worker.recognize(region, { user_patterns: cfg.ocrHint || "QR code valid for: n seconds" }))
 		.then(({ data }) => {
 			const raw = (data && data.text ? data.text : "").replace(/\n/g, " ").trim();
 			lastOcrRaw = raw;
